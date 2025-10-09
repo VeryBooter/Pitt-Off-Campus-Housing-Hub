@@ -1,5 +1,7 @@
 import os
 import sqlite3
+import time
+import requests
 from datetime import datetime
 from flask import Flask, g, jsonify, request, abort
 from flask_cors import CORS
@@ -29,6 +31,10 @@ def init_db():
 def make_app():
     app = Flask(__name__, static_folder='static', static_url_path='/static')
     CORS(app)
+
+    # Simple in-memory cache for geocoding responses: { key: (timestamp, data) }
+    GEOCACHE = {}
+    GEOCACHE_TTL = int(os.environ.get('GEOCACHE_TTL', 300))  # seconds
 
     @app.teardown_appcontext
     def close_connection(exception):
@@ -140,6 +146,74 @@ def make_app():
             }
         }
         return jsonify(feature), 201
+
+    # ===== Geocoding proxy (avoid direct browser calls to Nominatim) =====
+    NOMINATIM_BASE = 'https://nominatim.openstreetmap.org'
+
+    def cache_get(key):
+        v = GEOCACHE.get(key)
+        if not v:
+            return None
+        ts, data = v
+        if time.time() - ts > GEOCACHE_TTL:
+            del GEOCACHE[key]
+            return None
+        return data
+
+    def cache_set(key, data):
+        GEOCACHE[key] = (time.time(), data)
+
+    @app.route('/api/geocode', methods=['GET'])
+    def proxy_geocode():
+        q = request.args.get('q')
+        if not q or len(q.strip()) < 1:
+            return jsonify([])
+        limit = request.args.get('limit') or '5'
+        bbox = request.args.get('bbox')  # expected west,south,east,north
+        # build nominatim params
+        params = {'format': 'jsonv2', 'q': q, 'limit': limit, 'addressdetails': 0}
+        if bbox:
+            try:
+                west, south, east, north = [s.strip() for s in bbox.split(',')]
+                # nominatim expects viewbox=west,north,east,south
+                params['viewbox'] = f"{west},{north},{east},{south}"
+                params['bounded'] = 1
+            except Exception:
+                pass
+        key = f"search:{q}:{bbox}:{limit}"
+        cached = cache_get(key)
+        if cached is not None:
+            return jsonify(cached)
+        headers = {'User-Agent': 'Pitt-Housing-Hub/1.0 (you@example.com)'}
+        try:
+            resp = requests.get(f"{NOMINATIM_BASE}/search", params=params, headers=headers, timeout=5)
+            resp.raise_for_status()
+            data = resp.json()
+            cache_set(key, data)
+            return jsonify(data)
+        except Exception:
+            return jsonify([]), 502
+
+    @app.route('/api/reverse', methods=['GET'])
+    def proxy_reverse():
+        lat = request.args.get('lat')
+        lon = request.args.get('lon') or request.args.get('lng')
+        if not lat or not lon:
+            return jsonify({'error': 'lat and lon required'}), 400
+        key = f"rev:{lat}:{lon}"
+        cached = cache_get(key)
+        if cached is not None:
+            return jsonify(cached)
+        params = {'format': 'jsonv2', 'lat': lat, 'lon': lon, 'zoom': 18, 'addressdetails': 0}
+        headers = {'User-Agent': 'Pitt-Housing-Hub/1.0 (you@example.com)'}
+        try:
+            resp = requests.get(f"{NOMINATIM_BASE}/reverse", params=params, headers=headers, timeout=5)
+            resp.raise_for_status()
+            data = resp.json()
+            cache_set(key, data)
+            return jsonify(data)
+        except Exception:
+            return jsonify({}), 502
 
     return app
 

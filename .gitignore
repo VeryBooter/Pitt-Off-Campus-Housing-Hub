@@ -1,4 +1,12 @@
-# Logs
+.venv/
+__pycache__/
+*.pyc
+*.db
+/.env
+/.env.local
+/.env.*.local
+venv/
+node_modules/# Logs
 logs
 *.log
 npm-debug.log*
