@@ -1,0 +1,296 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Pitt Login</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      /* University of Pittsburgh brand colors (approx) */
+      --pitt-royal: #003594; /* Pitt Blue */
+      --pitt-gold:  #FFB81C; /* Pitt Gold */
+      --pitt-navy:  #001E62; /* Deep variant for contrast */
+      --bg:         #0b1020;
+      --text:       #0f172a;
+      --muted:      #64748b;
+      --surface:    #ffffff;
+      --error:      #b91c1c;
+    }
+
+    * { box-sizing: border-box; }
+    html, body { height: 100%; }
+    body {
+      margin: 0;
+      font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji", "Segoe UI Emoji";
+      background: radial-gradient(1200px 600px at 20% 10%, rgba(255,184,28,.18), transparent 60%),
+                  radial-gradient(1000px 500px at 80% 90%, rgba(0,53,148,.18), transparent 60%),
+                  linear-gradient(180deg, #0a0f1f 0%, #0d1328 100%);
+      color: #0b1220;
+      display: grid;
+      place-items: center;
+      padding: 32px 16px;
+    }
+
+    .shell {
+      width: 100%;
+      max-width: 960px;
+      display: grid;
+      grid-template-columns: 1.1fr 1fr;
+      gap: 0;
+      border-radius: 20px;
+      background: linear-gradient(145deg, rgba(255,184,28,.85), rgba(255,184,28,.25)) padding-box,
+                  linear-gradient(145deg, rgba(255,184,28,1), rgba(0,53,148,1)) border-box;
+      border: 2px solid transparent;
+      box-shadow: 0 20px 70px rgba(0,0,0,.35), inset 0 1px 0 rgba(255,255,255,.12);
+      overflow: hidden;
+    }
+
+    /* Left / hero side */
+    .hero {
+      position: relative;
+      background: conic-gradient(from 220deg at 70% 40%, rgba(0,53,148,.35), transparent 60%),
+                  linear-gradient(140deg, var(--pitt-royal) 0%, var(--pitt-navy) 100%);
+      padding: 48px;
+      color: white;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      min-height: 520px;
+    }
+    .hero .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      background: rgba(255,255,255,.08);
+      border: 1px solid rgba(255,255,255,.18);
+      padding: 8px 12px;
+      border-radius: 999px;
+      font-weight: 600;
+      letter-spacing: .2px;
+    }
+    .hero h1 {
+      margin: 18px 0 12px;
+      font-size: clamp(28px, 4vw, 42px);
+      line-height: 1.1;
+      letter-spacing: .2px;
+    }
+    .hero p {
+      margin: 0;
+      max-width: 48ch;
+      color: rgba(255,255,255,.85);
+    }
+
+    .hero .ribbons {
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      overflow: hidden;
+    }
+    .ribbon {
+      position: absolute;
+      width: 140%;
+      height: 16px;
+      left: -20%;
+      background: linear-gradient(90deg, var(--pitt-gold), #ffd76a);
+      opacity: .75;
+      filter: drop-shadow(0 6px 12px rgba(0,0,0,.25));
+      transform: rotate(-8deg);
+      animation: float 10s ease-in-out infinite;
+    }
+    .ribbon.r2 { top: 24%; transform: rotate(6deg); animation-duration: 14s; }
+    .ribbon.r3 { top: 62%; transform: rotate(-4deg); animation-duration: 12s; }
+    @keyframes float {
+      0%,100% { transform: translateX(0) rotate(var(--rot, -8deg)); }
+      50%     { transform: translateX(-20px) rotate(calc(var(--rot, -8deg) + .8deg)); }
+    }
+
+    /* Right / form side */
+    .panel {
+      background: #fff;
+      padding: 40px clamp(24px, 5vw, 48px);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .card {
+      width: 100%;
+      max-width: 420px;
+      background: var(--surface);
+      border-radius: 16px;
+      padding: 28px;
+      border: 1px solid #e2e8f0;
+      box-shadow: 0 10px 30px rgba(2, 6, 23, .08);
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 8px;
+    }
+    .brand-mark {
+      width: 40px; height: 40px; border-radius: 10px;
+      background: radial-gradient(circle at 70% 30%, #ffd76a 0 35%, transparent 36%),
+                  linear-gradient(135deg, var(--pitt-gold), #ffd76a);
+      border: 2px solid var(--pitt-royal);
+      box-shadow: 0 4px 10px rgba(0,0,0,.15);
+    }
+    .brand h2 {
+      margin: 0;
+      font-size: 22px;
+      color: var(--pitt-royal);
+      letter-spacing: .3px;
+    }
+
+    .subtitle { color: #475569; margin: 0 0 18px; font-size: 14px; }
+
+    form { display: grid; gap: 14px; }
+
+    label { font-weight: 600; font-size: 13px; color: #334155; }
+
+    .input {
+      display: flex;
+      align-items: center;
+      border: 1.5px solid #cbd5e1;
+      border-radius: 12px;
+      background: #fff;
+      padding: 10px 12px;
+      transition: border-color .2s, box-shadow .2s;
+    }
+    .input:focus-within {
+      border-color: var(--pitt-royal);
+      box-shadow: 0 0 0 4px rgba(0,53,148,.12);
+    }
+    .input input {
+      border: 0; outline: 0; width: 100%;
+      font-size: 15px; color: #0f172a;
+      background: transparent;
+    }
+    .input button.toggle {
+      border: 0; background: none; cursor: pointer; padding: 6px 8px; border-radius: 8px; font-size: 13px; color: var(--pitt-royal);
+    }
+    .input button.toggle:focus-visible { outline: 2px solid var(--pitt-gold); outline-offset: 2px; }
+
+    .row {
+      display: flex; align-items: center; justify-content: space-between; gap: 12px; font-size: 14px;
+    }
+    .row a { color: var(--pitt-royal); text-decoration: none; font-weight: 600; }
+    .row a:hover { text-decoration: underline; }
+
+    .btn {
+      border: 0; cursor: pointer;
+      background: linear-gradient(180deg, var(--pitt-gold), #e6a900);
+      color: #0b1020; font-weight: 800; letter-spacing: .3px;
+      padding: 12px 16px; border-radius: 12px; font-size: 15px;
+      box-shadow: 0 8px 20px rgba(255,184,28,.35);
+      transition: transform .04s ease, filter .2s ease, box-shadow .2s;
+    }
+    .btn:hover { filter: brightness(1.02); box-shadow: 0 10px 26px rgba(255,184,28,.42); }
+    .btn:active { transform: translateY(1px); }
+
+    .alt {
+      margin-top: 14px; text-align: center; color: #475569; font-size: 14px;
+    }
+    .alt a { color: var(--pitt-royal); font-weight: 700; text-decoration: none; }
+    .alt a:hover { text-decoration: underline; }
+
+    .footnote {
+      display: flex; align-items: center; gap: 10px; margin-top: 16px; font-size: 12px; color: #64748b;
+    }
+    .dot { width: 6px; height: 6px; background: var(--pitt-gold); border-radius: 50%; box-shadow: 0 0 0 3px rgba(255,184,28,.2); }
+
+    /* Checkboxes */
+    .checkbox {
+      display: inline-flex; align-items: center; gap: 10px; cursor: pointer; user-select: none;
+    }
+    .checkbox input { appearance: none; width: 18px; height: 18px; border-radius: 6px; border: 1.5px solid #cbd5e1; position: relative; }
+    .checkbox input:checked {
+      background: var(--pitt-royal); border-color: var(--pitt-royal);
+      box-shadow: 0 0 0 3px rgba(0,53,148,.14);
+    }
+    .checkbox input:checked::after {
+      content: ""; position: absolute; inset: 3px; border-radius: 4px; background: linear-gradient(180deg, #fff, #dce7ff);
+    }
+
+    /* Responsive */
+    @media (max-width: 860px) {
+      .shell { grid-template-columns: 1fr; }
+      .hero { min-height: 280px; }
+    }
+  </style>
+</head>
+<body>
+  <main class="shell" role="main">
+    <section class="hero" aria-label="Pitt brand intro">
+      <div>
+        <span class="badge" aria-hidden="true">🔵 Pitt Blue × 🟡 Pitt Gold</span>
+        <h1>Welcome back to your Pitt portal</h1>
+        <p>Securely sign in to access your courses, resources, and campus services. Your session uses modern encryption and device checks.</p>
+      </div>
+
+      <div class="ribbons" aria-hidden="true">
+        <div class="ribbon r1" style="--rot:-8deg; top: 10%;"></div>
+        <div class="ribbon r2" style="--rot:6deg;"></div>
+        <div class="ribbon r3" style="--rot:-4deg;"></div>
+      </div>
+
+      <div class="footnote">
+        <span class="dot" aria-hidden="true"></span>
+        <span>For demonstration purposes only — replace actions with your auth endpoint.</span>
+      </div>
+    </section>
+
+    <section class="panel" aria-label="Sign-in form">
+      <div class="card" role="form" aria-labelledby="signInTitle">
+        <div class="brand">
+          <div class="brand-mark" aria-hidden="true"></div>
+          <h2 id="signInTitle">Pitt Sign In</h2>
+        </div>
+        <p class="subtitle">Use your University credentials to continue.</p>
+        <form action="#" method="post" novalidate>
+          <div>
+            <label for="email">University Email</label>
+            <div class="input">
+              <input id="email" name="email" type="email" placeholder="abc123@pitt.edu" autocomplete="username" required />
+            </div>
+          </div>
+
+          <div>
+            <label for="password">Password</label>
+            <div class="input">
+              <input id="password" name="password" type="password" placeholder="••••••••" autocomplete="current-password" required />
+              <button class="toggle" type="button" aria-label="Show password" onclick="togglePassword()">Show</button>
+            </div>
+          </div>
+
+          <div class="row">
+            <label class="checkbox">
+              <input type="checkbox" id="remember" name="remember" />
+              <span>Remember me</span>
+            </label>
+            <a href="#" aria-label="Forgot your password?">Forgot password?</a>
+          </div>
+
+          <button class="btn" type="submit">Sign in</button>
+          <div class="alt">No account? <a href="#">Create one</a></div>
+        </form>
+      </div>
+    </section>
+  </main>
+
+  <script>
+    function togglePassword(){
+      const input = document.getElementById('password');
+      const btn = document.querySelector('.input .toggle');
+      const showing = input.type === 'text';
+      input.type = showing ? 'password' : 'text';
+      btn.textContent = showing ? 'Show' : 'Hide';
+      btn.setAttribute('aria-label', showing ? 'Show password' : 'Hide password');
+    }
+  </script>
+</body>
+</html>

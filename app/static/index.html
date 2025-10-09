@@ -1,0 +1,410 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Pitt Sound/House Map — Housing Ratings</title>
+
+  <!-- Leaflet -->
+  <link
+    rel="stylesheet"
+    href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+    integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
+    crossorigin=""
+  />
+  <script
+    src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+    integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
+    crossorigin=""
+  ></script>
+
+  <style>
+    :root { --bg:#0b1020; --card:#121936; --muted:#93a0c5; --accent:#4f7cff; --ok:#2ecc71; --warn:#f39c12; --bad:#e74c3c; }
+    * { box-sizing: border-box; }
+    html, body { height: 100%; margin: 0; font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, Noto Sans, "Apple Color Emoji", "Segoe UI Emoji"; background: var(--bg); color: #e6ecff; }
+    .layout { display: grid; grid-template-columns: 1fr 420px; height: 100%; }
+    #map { width: 100%; height: 100%; }
+    .panel { border-left: 1px solid rgba(255,255,255,.08); background: linear-gradient(180deg, rgba(18,25,54,.9), rgba(18,25,54,.6)); backdrop-filter: saturate(1.2) blur(8px); padding: 14px 16px 18px; overflow: auto; }
+    .panel h1 { font-size: 18px; margin: 0 0 8px; letter-spacing: .3px; }
+    .panel p.hint { margin: 6px 0 12px; color: var(--muted); font-size: 13px; }
+    .card { background: rgba(255,255,255,.03); border: 1px solid rgba(255,255,255,.06); border-radius: 14px; padding: 12px; margin-bottom: 12px; }
+    label { display: block; font-weight: 600; margin: 10px 0 6px; font-size: 13px; color: #d7e2ff; }
+    input[type="text"], select, textarea { width: 100%; border: 1px solid rgba(255,255,255,.1); background: rgba(255,255,255,.04); color: #e6ecff; border-radius: 10px; padding: 10px 12px; font-size: 14px; outline: none; }
+    textarea { min-height: 96px; resize: vertical; }
+    .row { display: grid; grid-template-columns: repeat(2,1fr); gap: 10px; }
+    .row-4 { display: grid; grid-template-columns: repeat(4,1fr); gap: 8px; }
+    .stars { display: inline-flex; gap: 6px; }
+    .stars input { display: none; }
+    .stars label { cursor: pointer; font-size: 20px; margin: 0; color: #5f6ea5; }
+    .stars input:checked ~ label, .stars label:hover, .stars label:hover ~ label { color: #ffd166; }
+    .pill { display: inline-block; padding: 4px 8px; border-radius: 999px; border: 1px solid rgba(255,255,255,.12); font-size: 12px; color: var(--muted); }
+    .coords { font-variant-numeric: tabular-nums; }
+    .sl { width: 100%; }
+    .submit { width: 100%; margin-top: 12px; padding: 12px 14px; border-radius: 12px; font-weight: 700; border: none; cursor: pointer; color: #0b1020; background: var(--accent); }
+    .submit:disabled { opacity: .6; cursor: not-allowed; }
+    .flash { font-size: 13px; margin: 8px 2px 0; }
+    .flash.ok { color: var(--ok); }
+    .flash.err { color: var(--bad); }
+    .marker-popup { font-size: 13px; }
+    .tiny { font-size: 12px; color: var(--muted); }
+    .footer-note { margin-top: 6px; font-size: 12px; color: var(--muted); }
+      /* Search UI */
+    .suggest { position: relative; }
+    .suggest-list { position: absolute; top: calc(100% + 6px); left: 0; right: 0; z-index: 1000; background: rgba(18,25,54,.98); border: 1px solid rgba(255,255,255,.12); border-radius: 10px; max-height: 220px; overflow: auto; box-shadow: 0 10px 30px rgba(0,0,0,.35); }
+    .suggest-item { padding: 8px 10px; font-size: 14px; cursor: pointer; border-bottom: 1px solid rgba(255,255,255,.06); }
+    .suggest-item:last-child { border-bottom: 0; }
+    .suggest-item:hover, .suggest-item.active { background: rgba(255,255,255,.06); }
+    .suggest-item .sub { display:block; font-size:12px; color: var(--muted); margin-top:2px; }
+  </style>
+</head>
+<body>
+  <div class="layout">
+    <div id="map" aria-label="Map"></div>
+
+    <aside class="panel" aria-label="Rating form">
+      <h1>Submit a housing rating</h1>
+      <p class="hint">Search for an address (or click the map) to set the location. Then rate and add a short note. (Audio comments were removed.)</p>
+
+      <!-- Address search -->
+      <div class="card">
+        <label for="search">Search address</label>
+        <div class="suggest">
+          <input type="text" id="search" placeholder="Type an address or place… (Enter to search)" autocomplete="off" />
+          <div id="suggestions" class="suggest-list" style="display:none"></div>
+        </div>
+        <p class="tiny">Geocoding by OpenStreetMap/Nominatim. For heavy use, switch to a provider with an API key.</p>
+      </div>
+
+      <div class="card">
+        <input type="hidden" id="lat" />
+        <input type="hidden" id="lng" />
+        </div>
+        <div class="row">
+          <div>
+            <label for="housingType">Housing type</label>
+            <select id="housingType">
+              <option value="">— Select —</option>
+              <option>Apartment</option>
+              <option>House</option>
+              <option>Dorm</option>
+              <option>Room/Shared</option>
+              <option>Short‑term rental</option>
+            </select>
+          </div>
+          <div>
+            <label for="template">Template</label>
+            <select id="template">
+              <option value="">Blank</option>
+              <option value="student">Student housing template</option>
+              <option value="family">Family‑friendly template</option>
+              <option value="short">Short‑term stay template</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <label>Overall rating</label>
+        <div class="stars" id="overallStars" role="radiogroup" aria-label="Overall rating from 1 to 5">
+          <!-- 5→1 so CSS hover paints leftwards -->
+          <input type="radio" name="overall" id="star5" value="5"><label for="star5" title="5 stars">★</label>
+          <input type="radio" name="overall" id="star4" value="4"><label for="star4" title="4 stars">★</label>
+          <input type="radio" name="overall" id="star3" value="3"><label for="star3" title="3 stars">★</label>
+          <input type="radio" name="overall" id="star2" value="2"><label for="star2" title="2 stars">★</label>
+          <input type="radio" name="overall" id="star1" value="1"><label for="star1" title="1 star">★</label>
+        </div>
+
+        <div class="row-4" style="margin-top:10px">
+          <div>
+            <label class="tiny">Affordability</label>
+            <input class="sl" type="range" min="1" max="5" value="3" id="afford" />
+          </div>
+          <div>
+            <label class="tiny">Maintenance</label>
+            <input class="sl" type="range" min="1" max="5" value="3" id="maint" />
+          </div>
+          <div>
+            <label class="tiny">Safety</label>
+            <input class="sl" type="range" min="1" max="5" value="3" id="safety" />
+          </div>
+          <div>
+            <label class="tiny">Noise</label>
+            <input class="sl" type="range" min="1" max="5" value="3" id="noise" />
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <label for="note">Your note</label>
+        <textarea id="note" placeholder="E.g., Management responds quickly; street noise after 10pm; utilities not included."></textarea>
+        <button id="submit" class="submit" disabled>Submit rating</button>
+        <div id="flash" class="flash" role="status" aria-live="polite"></div>
+        <div class="footer-note">By submitting, you agree your review may be shown on the public map. Please avoid sharing personal info.</div>
+      </div>
+    </aside>
+  </div>
+
+  <script>
+    // === Map ===
+    const map = L.map('map').setView([40.444, -79.956], 13); // Pittsburgh-ish default
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      maxZoom: 19,
+      attribution: '&copy; OpenStreetMap contributors'
+    }).addTo(map);
+
+    let pendingMarker = null;
+
+    function setCoords(lat, lng) {
+      document.getElementById('lat').value = lat.toFixed(6);
+      document.getElementById('lng').value = lng.toFixed(6);
+      document.getElementById('submit').disabled = false;
+    }
+
+    map.on('click', (e) => {
+      const { lat, lng } = e.latlng;
+      setCoords(lat, lng);
+      if (pendingMarker) { pendingMarker.remove(); }
+      pendingMarker = L.marker([lat, lng]).addTo(map);
+      pendingMarker.bindPopup('<div class="marker-popup">Setting address…</div>').openPopup();
+      reverseGeocode(lat, lng).then(addr => {
+        if (addr) {
+          searchInput.value = addr;
+          if (pendingMarker) {
+            pendingMarker.setPopupContent(`<div class=\"marker-popup\"><strong>${escapeHtml(addr.split(',')[0])}</strong><br/><span class=\"tiny\">Location set from map</span></div>`).openPopup();
+          }
+        } else {
+          if (pendingMarker) {
+            pendingMarker.setPopupContent('<div class="marker-popup">Location set from map</div>').openPopup();
+          }
+        }
+      });
+    });
+
+    // === Address Search (Nominatim) ===
+    const searchInput = document.getElementById('search');
+    const suggestionsEl = document.getElementById('suggestions');
+    let searchDebounce = null;
+    let activeIndex = -1;
+    let currentResults = [];
+    let searchMarker = null;
+
+    function clearSuggestions() {
+      suggestionsEl.style.display = 'none';
+      suggestionsEl.innerHTML = '';
+      activeIndex = -1;
+    }
+
+    function renderSuggestions(results) {
+      currentResults = results;
+      if (!results.length) { clearSuggestions(); return; }
+      suggestionsEl.innerHTML = results.map((r, i) => `
+        <div class="suggest-item" data-idx="${i}">
+          ${escapeHtml(r.display_name.split(',')[0])}
+          <span class="sub">${escapeHtml(r.display_name)}</span>
+        </div>`).join('');
+      [...suggestionsEl.children].forEach(el => {
+        el.addEventListener('click', () => chooseResult(Number(el.dataset.idx)));
+      });
+      suggestionsEl.style.display = 'block';
+    }
+
+    async function queryGeocode(q) {
+      if (!q || q.trim().length < 3) { clearSuggestions(); return; }
+      const b = map.getBounds();
+      const url = `https://nominatim.openstreetmap.org/search?format=jsonv2&limit=5&q=${encodeURIComponent(q)}&viewbox=${b.getWest()},${b.getNorth()},${b.getEast()},${b.getSouth()}&bounded=1&addressdetails=0`;
+      try {
+        const resp = await fetch(url, { headers: { 'Accept': 'application/json' } });
+        if (!resp.ok) throw new Error('geocode failed');
+        const json = await resp.json();
+        renderSuggestions(json);
+      } catch (e) {
+        clearSuggestions();
+        console.debug('Geocoding error', e);
+      }
+    }
+
+    function chooseResult(idx) {
+      const r = currentResults[idx];
+      if (!r) return;
+      clearSuggestions();
+      searchInput.value = r.display_name;
+      const lat = parseFloat(r.lat), lon = parseFloat(r.lon);
+      map.setView([lat, lon], Math.max(map.getZoom(), 17));
+      if (searchMarker) searchMarker.remove();
+      searchMarker = L.marker([lat, lon]).addTo(map);
+      searchMarker.bindPopup(`<div class="marker-popup"><strong>${escapeHtml(r.display_name.split(',')[0])}</strong><br/><span class="tiny">Location set from search</span></div>`).openPopup();
+      setCoords(lat, lon);
+    }
+
+    async function reverseGeocode(lat, lon) {
+      try {
+        const url = `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${lat}&lon=${lon}&zoom=18&addressdetails=0`;
+        const resp = await fetch(url, { headers: { 'Accept': 'application/json' } });
+        if (!resp.ok) return null;
+        const json = await resp.json();
+        return json.display_name || null;
+      } catch (_) { return null; }
+    }
+
+    searchInput.addEventListener('input', () => {
+      if (searchDebounce) clearTimeout(searchDebounce);
+      searchDebounce = setTimeout(() => queryGeocode(searchInput.value), 250);
+    });
+
+    searchInput.addEventListener('keydown', (e) => {
+      const items = [...suggestionsEl.children];
+      if (e.key === 'ArrowDown') {
+        e.preventDefault(); if (!items.length) return; activeIndex = (activeIndex + 1) % items.length;
+      } else if (e.key === 'ArrowUp') {
+        e.preventDefault(); if (!items.length) return; activeIndex = (activeIndex - 1 + items.length) % items.length;
+      } else if (e.key === 'Enter') {
+        if (items.length && activeIndex >= 0) { e.preventDefault(); chooseResult(activeIndex); return; }
+        if (!items.length) { e.preventDefault(); queryGeocode(searchInput.value).then(() => chooseResult(0)); return; }
+      } else if (e.key === 'Escape') {
+        clearSuggestions();
+      } else {
+        return; // let input event handle query
+      }
+      items.forEach((el, i) => el.classList.toggle('active', i === activeIndex));
+      if (items[activeIndex]) items[activeIndex].scrollIntoView({ block: 'nearest' });
+    });
+
+    // Hide suggestions when clicking outside
+    document.addEventListener('click', (e) => {
+      if (!suggestionsEl.contains(e.target) && e.target !== searchInput) clearSuggestions();
+    });
+
+    // === Templates ===
+    const templateSelect = document.getElementById('template');
+    const noteField = document.getElementById('note');
+    const templates = {
+      student: `Lease: 12 mo | Roommates: __ | Utilities: __\nPros: short walk to campus; decent study quiet hours.\nCons: older appliances; occasional weekend noise.\nTips: ask about internet speed and included furniture.`,
+      family: `Bedrooms: __ | Schools nearby: __\nPros: safe, well-lit street; parks/playgrounds close.\nCons: limited storage; traffic during school pickup.\nNotes: look for maintenance response times & heating.`,
+      short: `Stay length: __ | Price/night: __\nPros: clean, easy check-in, responsive host.\nCons: street parking tricky; some street noise.\nNotes: bring earplugs if sensitive to sound.`
+    };
+    templateSelect.addEventListener('change', () => {
+      const v = templateSelect.value;
+      if (v && templates[v]) noteField.value = templates[v];
+    });
+
+    // === Load existing points (optional) ===
+    // If your backend exposes existing reviews as GeoJSON at /api/reviews, they will be rendered.
+    async function loadExisting() {
+      try {
+        const resp = await fetch('/api/reviews');
+        if (!resp.ok) return; // silently ignore if endpoint not present
+        const data = await resp.json();
+        // Expecting FeatureCollection
+        (data.features || []).forEach(f => {
+          const [lng, lat] = f.geometry.coordinates;
+          const p = f.properties || {};
+          const popup = `
+            <div class="marker-popup">
+              <strong>${p.housingType || 'Housing'}</strong><br/>
+              ${p.address ? `<span class="tiny">${escapeHtml(p.address)}</span><br/>` : ''}
+              Overall: ${'★'.repeat(p.overall || 0)}<br/>
+              Afford ${p.afford}/5 · Maint ${p.maint}/5 · Safety ${p.safety}/5 · Noise ${p.noise}/5
+              ${p.note ? `<hr style="border-color: rgba(255,255,255,.15)"><div>${escapeHtml(p.note)}</div>` : ''}
+            </div>`;
+          L.marker([lat, lng]).addTo(map).bindPopup(popup);
+        });
+      } catch (e) {
+        console.debug('No existing points loaded', e);
+      }
+    }
+    loadExisting();
+
+    // === Submit ===
+    function getOverall() {
+      const v = [...document.querySelectorAll('input[name="overall"]')].find(i => i.checked);
+      return v ? Number(v.value) : null;
+    }
+
+    function escapeHtml(s) {
+      return (s || '').replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;','\'':'&#39;'}[m]));
+    }
+
+    async function submitRating() {
+      const lat = parseFloat(document.getElementById('lat').value);
+      const lng = parseFloat(document.getElementById('lng').value);
+      const address = (searchInput.value || '').trim();
+      const housingType = document.getElementById('housingType').value || null;
+      const overall = getOverall();
+      const afford = Number(document.getElementById('afford').value);
+      const maint = Number(document.getElementById('maint').value);
+      const safety = Number(document.getElementById('safety').value);
+      const noise = Number(document.getElementById('noise').value);
+      const note = noteField.value.trim();
+
+      const flash = document.getElementById('flash');
+      flash.textContent = '';
+
+      if (!(Number.isFinite(lat) && Number.isFinite(lng))) {
+        flash.textContent = 'Please choose a location by searching or clicking the map.';
+        flash.className = 'flash err';
+        return;
+      }
+      if (!address) {
+        flash.textContent = 'Please provide an address or place.';
+        flash.className = 'flash err';
+        return;
+      }
+      if (!overall) {
+        flash.textContent = 'Please select an overall rating.';
+        flash.className = 'flash err';
+        return;
+      }
+
+      const payload = {
+        lat, lng, address, housingType, overall, afford, maint, safety, noise, note
+      };
+
+      try {
+        document.getElementById('submit').disabled = true;
+        const resp = await fetch('/api/reviews', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+
+        if (!resp.ok) throw new Error('Failed to submit');
+        const saved = await resp.json();
+        const coords = saved?.geometry?.coordinates || [lng, lat];
+        const props = saved?.properties || payload;
+        const popup = `
+          <div class="marker-popup">
+            <strong>${props.housingType || 'Housing'}</strong><br/>
+            <span class="tiny">${escapeHtml(props.address || '')}</span><br/>
+            Overall: ${'★'.repeat(props.overall || 0)}<br/>
+            Afford ${props.afford}/5 · Maint ${props.maint}/5 · Safety ${props.safety}/5 · Noise ${props.noise}/5
+            ${props.note ? `<hr style="border-color: rgba(255,255,255,.15)"><div>${escapeHtml(props.note)}</div>` : ''}
+          </div>`;
+        L.marker([coords[1], coords[0]]).addTo(map).bindPopup(popup).openPopup();
+
+        flash.textContent = 'Thanks! Your rating has been added to the map.';
+        flash.className = 'flash ok';
+        document.querySelectorAll('input[name="overall"]').forEach(r => (r.checked = false));
+        noteField.value = '';
+      } catch (err) {
+        console.error(err);
+        flash.textContent = 'There was a problem submitting. Please try again.';
+        flash.className = 'flash err';
+      } finally {
+        document.getElementById('submit').disabled = false;
+      }
+    }
+
+    document.getElementById('submit').addEventListener('click', submitRating);
+
+    // === Accessibility nicety: keyboard set stars ===
+    document.getElementById('overallStars').addEventListener('keydown', (e) => {
+      const keys = ['1','2','3','4','5'];
+      if (keys.includes(e.key)) {
+        const id = 'star' + e.key;
+        const target = document.getElementById(id);
+        if (target) { target.checked = true; }
+      }
+    });
+  </script>
+</body>
+</html>
