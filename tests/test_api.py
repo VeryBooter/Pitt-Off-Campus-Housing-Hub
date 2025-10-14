@@ -26,13 +26,22 @@ def test_post_and_get_review(client):
         'lng': -79.956,
         'address': 'PyTest Address',
         'housingType': 'Apartment',
-        'overall': 5
+        'overall': 5,
+        'quick_comment': 'Nice, close to campus',
+        'who_runs': 'Private landlord',
+        'proximity': 'Aldi:500m;Cinema:800m;Asian store:300m',
+        'cleanliness': 4,
+        'pests': 'none',
+        'furniture': 'Partially furnished'
     }
     rv = client.post('/api/reviews', data=json.dumps(payload), content_type='application/json')
     assert rv.status_code == 201
     data = rv.get_json()
     assert data['type'] == 'Feature'
     assert data['geometry']['coordinates'][0] == payload['lng']
+    assert data['properties']['quick_comment'] == payload['quick_comment']
+    assert data['properties']['who_runs'] == payload['who_runs']
+    assert data['properties']['proximity'] == payload['proximity']
 
     # now GET
     rv2 = client.get('/api/reviews')
