@@ -1,9 +1,10 @@
-import os
+import os, requests  # ensure these imports are present at the top
 import sqlite3
 from contextlib import closing
 from pathlib import Path
 import requests
 from flask import Flask, jsonify, request, send_from_directory
+from flask import request, jsonify
 from dotenv import load_dotenv
 from flask_cors import CORS  # <-- add this
 
@@ -43,6 +44,7 @@ def geocode():
     if not q:
         return jsonify({"error": "Missing 'q' parameter"}), 400
 
+    # Respect Nominatim usage policy
     email = os.getenv("NOMINATIM_EMAIL", "admin@example.com")
     ua = f"PittOffCampusHousingHub/1.0 ({email})"
 
@@ -52,12 +54,8 @@ def geocode():
         "limit": 5,
         "addressdetails": 1,
         "bounded": 1,
-        "viewbox": ",".join([
-            str(-80.05),  # west
-            str(40.40),   # south
-            str(-79.90),  # east
-            str(40.48)    # north
-        ]),
+        # west,south,east,north — bounds around Oakland/Pitt
+        "viewbox": ",".join([str(-80.05), str(40.40), str(-79.90), str(40.48)]),
     }
 
     r = requests.get(
@@ -69,18 +67,16 @@ def geocode():
     r.raise_for_status()
     raw = r.json()
 
-    def map_item(it):
-        external_id = f"osm:{it['place_id']}"
-        name = it.get("name") or it.get("display_name", "Unknown")
+    def to_item(it):
         return {
-            "external_id": external_id,
-            "name": name,
-            "address": it.get("display_name", name),
+            "external_id": f"osm:{it['place_id']}",
+            "name": it.get("name") or it.get("display_name", "Unknown"),
+            "address": it.get("display_name"),
             "lat": float(it["lat"]),
             "lng": float(it["lon"]),
         }
 
-    return jsonify([map_item(it) for it in raw])
+    return jsonify([to_item(it) for it in raw])
 
 @app.get("/api/reviews")
 def list_reviews():
