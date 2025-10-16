@@ -1,152 +1,50 @@
 <!doctype html>
-<html>
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Pitt Off-Campus Housing Hub</title>
-    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-    <style>
-      body { font-family: system-ui, sans-serif; margin: 0; }
-      header { padding: 12px 16px; border-bottom: 1px solid #e5e7eb; display:flex; gap:12px; align-items:center; }
-      h1 { font-size: 18px; margin: 0; }
-      .search { display:flex; gap:8px; width: 100%; max-width: 840px; }
-      .search input { flex:1; padding: 10px; border: 1px solid #d1d5db; border-radius: 8px; }
-      .search button { padding: 10px 14px; border: 1px solid #111827; background:#111827; color:white; border-radius:8px; cursor:pointer; }
-      .container { display:grid; grid-template-columns: 1fr 360px; height: calc(100vh - 62px); }
-      #map { width: 100%; height: 100%; }
-      aside { border-left: 1px solid #e5e7eb; padding: 12px; overflow:auto; }
-      .result { padding:8px; border:1px solid #e5e7eb; border-radius:8px; margin:6px 0; cursor:pointer; }
-      .result:hover { background:#f9fafb; }
-      .star { font-size:22px; cursor:pointer; user-select:none; }
-      .star.filled { color: #f59e0b; }
-      .muted { color:#6b7280; font-size: 12px; }
-    </style>
-  </head>
-  <body>
-    <header>
-      <h1>Pitt Off-Campus Housing Hub</h1>
-      <div class="search">
-        <input id="q" placeholder="Search by address (e.g., 3990 Fifth Ave.)" />
-        <button id="searchBtn">Search</button>
-      </div>
-    </header>
-    <div class="container">
-      <div id="map"></div>
-      <aside>
-        <div id="results"></div>
-        <div id="placePanel" style="display:none"></div>
-        <div id="reviewsPanel" style="display:none"></div>
-      </aside>
-    </div>
-
-    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-    <script>
-      const map = L.map('map').setView([40.444, -79.956], 15);
-      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-        maxZoom: 19,
-        attribution: '&copy; OpenStreetMap contributors'
-      }).addTo(map);
-
-      let activeMarker = null;
-      let activePlace = null;
-
-      const qEl = document.getElementById('q');
-      const resultsEl = document.getElementById('results');
-      const searchBtn = document.getElementById('searchBtn');
-
-      async function runSearch() {
-        const q = qEl.value.trim();
-        if (!q) return;
-        resultsEl.innerHTML = '<p class="muted">Searching…</p>';
-        const res = await fetch(`/api/geocode?q=${encodeURIComponent(q)}`);
-        const items = await res.json();
-        if (!Array.isArray(items) || items.length === 0) {
-          resultsEl.innerHTML = '<p>No matches found.</p>';
-          return;
-        }
-        resultsEl.innerHTML = '';
-        items.forEach(it => {
-          const div = document.createElement('div');
-          div.className = 'result';
-          div.innerHTML = `<strong>${it.name}</strong><br/><span class="muted">${it.address}</span>`;
-          div.onclick = () => selectPlace(it);
-          resultsEl.appendChild(div);
-        });
-      }
-
-      searchBtn.onclick = runSearch;
-      qEl.addEventListener('keydown', (e) => { if (e.key === 'Enter') runSearch(); });
-
-      function selectPlace(p) {
-        activePlace = p;
-        if (activeMarker) map.removeLayer(activeMarker);
-        activeMarker = L.marker([p.lat, p.lng]).addTo(map);
-        map.flyTo([p.lat, p.lng], 18);
-        renderForm();
-        loadReviews();
-      }
-
-      function renderForm() {
-        const el = document.getElementById('placePanel');
-        el.style.display = 'block';
-        el.innerHTML = `
-          <h3>${activePlace.name}</h3>
-          <div class="muted">${activePlace.address}</div>
-          <hr/>
-          <div id="stars"></div>
-          <textarea id="comment" placeholder="Comment (optional)" style="width:100%;height:60px;"></textarea>
-          <button id="submitBtn">Submit Review</button>
-        `;
-        setupStars();
-        document.getElementById('submitBtn').onclick = submitReview;
-      }
-
-      function setupStars() {
-        const starsEl = document.getElementById('stars');
-        let current = 0;
-        for (let i = 1; i <= 5; i++) {
-          const s = document.createElement('span');
-          s.className = 'star';
-          s.textContent = '★';
-          s.onclick = () => { current = i; update(); };
-          starsEl.appendChild(s);
-        }
-        function update() {
-          [...starsEl.children].forEach((el, idx) => el.classList.toggle('filled', idx < current));
-          starsEl.dataset.value = current;
-        }
-        update();
-      }
-
-      async function submitReview() {
-        const rating = parseInt(document.getElementById('stars').dataset.value || '0');
-        const comment = document.getElementById('comment').value;
-        if (!rating) return alert('Select a rating.');
-        const res = await fetch('/api/reviews', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ ...activePlace, rating, comment })
-        });
-        if (res.ok) loadReviews();
-      }
-
-      async function loadReviews() {
-        const panel = document.getElementById('reviewsPanel');
-        panel.style.display = 'block';
-        panel.innerHTML = '<p class="muted">Loading reviews…</p>';
-        const res = await fetch(`/api/reviews?external_id=${encodeURIComponent(activePlace.external_id)}`);
-        const data = await res.json();
-        if (!data.reviews?.length) {
-          panel.innerHTML = '<p>No reviews yet.</p>';
-          return;
-        }
-        panel.innerHTML = `<p>${data.count} review(s), average ${data.avg_rating}/5</p>`;
-        data.reviews.forEach(r => {
-          const div = document.createElement('div');
-          div.innerHTML = `${'★'.repeat(r.rating)}${'☆'.repeat(5-r.rating)} - ${r.comment || ''}`;
-          panel.appendChild(div);
-        });
-      }
-    </script>
-  </body>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Pitt Off‑Campus Housing Hub</title>
+<style>
+:root {
+--pitt-blue: #003594; /* Pitt Royal */
+--pitt-gold: #FFB81C; /* Pitt Gold */
+--ink: #0b1220;
+--bg: #fff8e6; /* warm background hinting gold */
+}
+* { box-sizing: border-box; }
+body {
+margin: 0; font-family: system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, "Helvetica Neue", Arial, "Noto Sans", "Apple Color Emoji", "Segoe UI Emoji";
+color: var(--ink); background: var(--bg);
+}
+header {
+background: var(--pitt-gold); color: var(--pitt-blue);
+padding: 24px 16px; position: relative; overflow: hidden;
+border-bottom: 6px solid var(--pitt-blue);
+}
+.wrap { max-width: 980px; margin: 0 auto; padding: 16px; }
+h1 { margin: 0; font-weight: 900; letter-spacing: 0.2px; font-size: 28px; }
+p.lead { margin: 6px 0 0; opacity: 0.9; }
+.card {
+background: #fff; border: 2px solid var(--pitt-blue); border-radius: 16px;
+padding: 16px; margin: 16px 0; box-shadow: 0 6px 0 rgba(0,0,0,0.08);
+}
+.grid { display: grid; grid-template-columns: 1fr; gap: 16px; }
+@media (min-width: 900px) { .grid { grid-template-columns: 1fr 1fr; } }
+label { font-weight: 600; color: var(--pitt-blue); }
+input, button, select, textarea {
+font: inherit; padding: 10px 12px; border-radius: 10px; border: 2px solid var(--pitt-blue);
+outline: none; width: 100%;
+}
+button {
+background: var(--pitt-blue); color: var(--pitt-gold); cursor: pointer; font-weight: 800; letter-spacing: 0.3px;
+transition: transform .05s ease-in-out, filter .15s;
+}
+button:hover { filter: brightness(1.05); }
+button:active { transform: translateY(1px); }
+.hero-svg { position: absolute; right: -60px; bottom: -40px; width: 420px; height: auto; opacity: 0.2; }
+.muted { opacity: .8; font-size: .95rem; }
+.row { display: grid; grid-template-columns: 1fr 140px; gap: 10px; align-items: end; }
+.pill { display:inline-block; background: #fff; color: var(--pitt-blue); border:2px solid var(--pitt-blue); padding:6px 10px; border-radius:999px; font-weight:700; }
+.reviews li { border-bottom: 1px dashed #c7c7c7; padding: 8px 0; }
+footer { text-align:center; padding: 24px; color:#333; }
 </html>

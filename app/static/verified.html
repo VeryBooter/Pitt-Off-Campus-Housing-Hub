@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Verified • Pitt Off‑Campus Housing Hub</title>
+<style>
+:root { --pitt-blue:#003594; --pitt-gold:#FFB81C; }
+body { margin:0; font-family: system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, "Helvetica Neue", Arial; background: var(--pitt-gold); color: var(--pitt-blue); display:grid; place-items:center; min-height:100vh; }
+.card { background:#fff; color:#000; border:3px solid var(--pitt-blue); border-radius:16px; padding:24px; max-width:560px; box-shadow: 0 10px 0 rgba(0,0,0,.08); }
+.pill { display:inline-block; background: var(--pitt-blue); color: var(--pitt-gold); padding:6px 10px; border-radius:999px; font-weight:800; }
+a { color: var(--pitt-blue); font-weight:700; }
+</style>
+</head>
+<body>
+<div class="card">
+<h1>🎉 You’re verified!</h1>
+<p id="who"></p>
+<p>Keep access after graduation: <a href="/static/index.html#backup">add a backup email</a>.</p>
+<p><a href="/static/index.html">Back to Home</a></p>
+</div>
+<script>
+const params = new URLSearchParams(location.search);
+const email = params.get('email');
+if (email) document.getElementById('who').innerHTML = `Primary email: <span class="pill">${email}</span>`;
+</script>
+</body>
+</html>
