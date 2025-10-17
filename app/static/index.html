@@ -1,5 +1,6 @@
 <!doctype html>
 <html>
+  <link rel="stylesheet" href="pitt-margins.css">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -32,6 +33,40 @@
       button.primary:hover { filter:brightness(1.05); }
       textarea { width:100%; min-height:72px; padding:10px; border:1px solid #d1d5db; border-radius:8px; font:inherit; }
       @media (max-width: 960px) { .container { grid-template-columns: 1fr; height:auto; } #map { height: 300px; } }
+    </style>
+    <!-- Pitt-themed margin gutters (subtle) -->
+    <style>
+      :root {
+        /* Official Pitt brand colors */
+        --pitt-blue: #003594;
+        --pitt-gold: #FFB81C;
+      }
+
+      /* Keep the page itself white; decorate only the outer gutters */
+      html, body {
+        background-color: #ffffff;
+      }
+
+      /*
+        Two translucent vertical panels pinned to the left/right edges.
+        They only show where there’s leftover page gutter (the “white margins”).
+        Central content stays exactly as-is.
+      */
+      body {
+        background-image:
+          linear-gradient(to bottom, rgba(0, 53, 148, 0.06), rgba(0, 53, 148, 0.06)),
+          linear-gradient(to bottom, rgba(255, 184, 28, 0.08), rgba(255, 184, 28, 0.08));
+        background-repeat: no-repeat, no-repeat;
+        background-position: left top, right top;
+        background-size: min(12vw, 160px) 100%, min(12vw, 160px) 100%;
+      }
+
+      /* On smaller screens, reduce the gutter width so it stays tasteful */
+      @media (max-width: 1024px) {
+        body {
+          background-size: min(7vw, 80px) 100%, min(7vw, 80px) 100%;
+        }
+      }
     </style>
   </head>
   <body>

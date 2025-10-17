@@ -7,6 +7,3 @@ __pycache__/
 # Local data
 app/data/
 .env
-.venv/
-app/data/
-.env

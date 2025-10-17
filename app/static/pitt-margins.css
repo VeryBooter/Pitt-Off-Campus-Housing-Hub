@@ -1,0 +1,33 @@
+/* Pitt-themed gutters in the WHITE margins only
+   - No layout or HTML changes
+   - Resilient to other body/page styles
+   - Subtle, accessible contrast
+*/
+
+:root {
+  --pitt-blue: #003594;
+  --pitt-gold: #FFB81C;
+  /* Margin gutter width scales with viewport but stays tasteful */
+  --gutter-w: clamp(28px, 9vw, 140px);
+  --blue-a: 0.08;  /* 8% opacity */
+  --gold-a: 0.10;  /* 10% opacity */
+}
+
+/* Keep the page base white, no matter what other CSS does */
+html {
+  background-color: #ffffff !important;
+  /* Two vertical panels: left = Pitt Blue, right = Pitt Gold */
+  background-image:
+    linear-gradient(to bottom, rgba(0, 53, 148, var(--blue-a)), rgba(0, 53, 148, var(--blue-a))),
+    linear-gradient(to bottom, rgba(255, 184, 28, var(--gold-a)), rgba(255, 184, 28, var(--gold-a)));
+  background-repeat: no-repeat, no-repeat;
+  background-position: left top, right top;
+  background-size: var(--gutter-w) 100%, var(--gutter-w) 100%;
+  /* Make sure nothing else overrides the images */
+  background-clip: border-box !important;
+}
+
+/* Small screens: narrower gutters so it doesn’t crowd content */
+@media (max-width: 1024px) {
+  :root { --gutter-w: clamp(18px, 7vw, 80px); }
+}
