@@ -27,72 +27,16 @@ app.config["SECRET_KEY"] = os.getenv("SECRET_KEY", "dev-secret")
 APP_BASE_URL = os.getenv("APP_BASE_URL", "http://127.0.0.1:5000")
 
 
-limiter = Limiter(get_remote_address, app=app, default_limits=["200/hour"]) # global cap
+# Flask‑Limiter v3+ init pattern (avoids __init__ signature issues across versions)
+limiter = Limiter(key_func=get_remote_address)
+limiter.init_app(app)
 
 
-# CORS only for Live Server use; off by default
+# Optional CORS (only if you serve frontend via VS Code Live Server on 5500)
 if os.getenv("ENABLE_CORS", "0") == "1":
+try:
 from flask_cors import CORS
 CORS(app, resources={r"/auth/*": {"origins": ["http://127.0.0.1:5500", "http://localhost:5500"]}})
-
-
-# ----------------------------------------------------------------------------
-# DB helpers & schema
-# ----------------------------------------------------------------------------
-
-
-def _db():
-conn = getattr(app, "_db", None)
-if conn is None:
-conn = sqlite3.connect(DB_PATH, check_same_thread=False)
-conn.row_factory = sqlite3.Row
-app._db = conn
-return conn
-
-
-
-
-def init_db():
-conn = _db(); cur = conn.cursor()
-
-
-# Reviews (existing feature)
-cur.execute(
-"""
-CREATE TABLE IF NOT EXISTS reviews (
-id INTEGER PRIMARY KEY AUTOINCREMENT,
-lat REAL,
-lng REAL,
-address TEXT,
-housingType TEXT,
-overall INTEGER,
-created_at TEXT NOT NULL
-)
-"""
-)
-
-
-# Users + verification
-cur.execute(
-"""
-CREATE TABLE IF NOT EXISTS users (
-id INTEGER PRIMARY KEY AUTOINCREMENT,
-pitt_email TEXT UNIQUE,
-verified_at TEXT,
-created_at TEXT NOT NULL
-)
-"""
-)
-
-
-cur.execute(
-"""
-CREATE TABLE IF NOT EXISTS email_verification_tokens (
-id INTEGER PRIMARY KEY AUTOINCREMENT,
-email TEXT NOT NULL,
-token_hash TEXT NOT NULL,
-expires_at TEXT NOT NULL,
-used_at TEXT,
-created_ip TEXT,
-created_ua TEXT
+except Exception as e:
+print("CORS disabled:", e)
 app.run(host="127.0.0.1", port=5000)
