@@ -32,11 +32,4 @@ limiter = Limiter(key_func=get_remote_address)
 limiter.init_app(app)
 
 
-# Optional CORS (only if you serve frontend via VS Code Live Server on 5500)
-if os.getenv("ENABLE_CORS", "0") == "1":
-try:
-from flask_cors import CORS
-CORS(app, resources={r"/auth/*": {"origins": ["http://127.0.0.1:5500", "http://localhost:5500"]}})
-except Exception as e:
-print("CORS disabled:", e)
 app.run(host="127.0.0.1", port=5000)
