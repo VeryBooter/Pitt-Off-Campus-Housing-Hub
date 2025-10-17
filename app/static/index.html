@@ -4,43 +4,67 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Pitt Off-Campus Housing Hub</title>
+
+    <!-- Leaflet map library -->
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <style>
-      body { font-family: system-ui, sans-serif; margin: 0; }
+      :root { --pitt-blue:#003594; --pitt-gold:#FFB81C; }
+      body { font-family: system-ui, -apple-system, Segoe UI, Roboto, "Helvetica Neue", Arial, sans-serif; margin: 0; color:#111827; }
       header { padding: 12px 16px; border-bottom: 1px solid #e5e7eb; display:flex; gap:12px; align-items:center; }
       h1 { font-size: 18px; margin: 0; }
       .search { display:flex; gap:8px; width: 100%; max-width: 840px; }
       .search input { flex:1; padding: 10px; border: 1px solid #d1d5db; border-radius: 8px; }
       .search button { padding: 10px 14px; border: 1px solid #111827; background:#111827; color:white; border-radius:8px; cursor:pointer; }
+      .search button:hover { filter:brightness(1.05); }
       .container { display:grid; grid-template-columns: 1fr 360px; height: calc(100vh - 62px); }
       #map { width: 100%; height: 100%; }
       aside { border-left: 1px solid #e5e7eb; padding: 12px; overflow:auto; }
-      .result { padding:8px; border:1px solid #e5e7eb; border-radius:8px; margin:6px 0; cursor:pointer; }
+      .result { padding:8px 10px; border:1px dashed #c7c7c7; border-radius:8px; margin:6px 0; cursor:pointer; }
       .result:hover { background:#f9fafb; }
-      .star { font-size:22px; cursor:pointer; user-select:none; }
-      .star.filled { color: #f59e0b; }
-      .muted { color:#6b7280; font-size: 12px; }
+      .muted { color:#6b7280; }
+
+      /* rating stars */
+      .star { font-size: 22px; cursor: pointer; user-select: none; color: #d1d5db; margin-right: 4px; }
+      .star.filled { color: var(--pitt-gold); }
+
+      /* simple button */
+      button.primary { background: var(--pitt-blue); border: 1px solid var(--pitt-blue); color: #fff; padding: 8px 12px; border-radius:8px; cursor: pointer; }
+      button.primary:hover { filter:brightness(1.05); }
+      textarea { width:100%; min-height:72px; padding:10px; border:1px solid #d1d5db; border-radius:8px; font:inherit; }
+      @media (max-width: 960px) { .container { grid-template-columns: 1fr; height:auto; } #map { height: 300px; } }
     </style>
   </head>
   <body>
     <header>
       <h1>Pitt Off-Campus Housing Hub</h1>
       <div class="search">
-        <input id="q" placeholder="Search by address/building (e.g., SkyVue, Semple St, Oakland)" />
+        <input id="q" placeholder="Search by address (e.g. 3990 Fifth Ave)" autocomplete="off" />
         <button id="searchBtn">Search</button>
       </div>
     </header>
+
     <div class="container">
       <div id="map"></div>
       <aside>
         <div id="results"></div>
+
+        <!-- Shown after you click a result -->
         <div id="placePanel" style="display:none"></div>
+
+        <!-- Reviews for the selected street -->
         <div id="reviewsPanel" style="display:none"></div>
       </aside>
     </div>
 
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script>
+      // ========= API base helper (works on 5000 and 5500) =========
+      // If this page is served by Flask (port 5000): same-origin ("")
+      // If this page is served by Live Server (port 5500): call Flask explicitly
+      const API_BASE = (location.port === '5000') ? '' : 'http://127.0.0.1:5000';
+      const api = (path, init) => fetch(`${API_BASE}${path}`, init);
+
+      // ========= Map init =========
       const map = L.map('map').setView([40.444, -79.956], 15);
       L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
         maxZoom: 19,
@@ -54,48 +78,83 @@
       const resultsEl = document.getElementById('results');
       const searchBtn = document.getElementById('searchBtn');
 
+      searchBtn.addEventListener('click', runSearch);
+      qEl.addEventListener('keydown', (e) => { if (e.key === 'Enter') runSearch(); });
+
+      // ========= SEARCH (street-only; assume Pittsburgh) =========
       async function runSearch() {
         const q = qEl.value.trim();
         if (!q) return;
+
         resultsEl.innerHTML = '<p class="muted">Searching…</p>';
-        const res = await fetch(`/api/geocode?q=${encodeURIComponent(q)}`);
-        const items = await res.json();
-        if (!Array.isArray(items) || items.length === 0) {
-          resultsEl.innerHTML = '<p>No matches found.</p>';
-          return;
+
+        const url = 'https://nominatim.openstreetmap.org/search?' + new URLSearchParams({
+          q: `${q}, Pittsburgh, PA`,
+          format: 'jsonv2',
+          limit: '8',
+          addressdetails: '1'
+        }).toString();
+
+        try {
+          const resp = await fetch(url, { headers: { 'Accept-Language': 'en' }});
+          const data = await resp.json();
+
+          const items = (Array.isArray(data) ? data : [])
+            .filter(r => /pittsburgh/i.test(r.display_name || ''))
+            .map(r => {
+              const display = r.display_name || '';
+              const parts = display.split(',');
+              const street = (parts[0] || q).trim();     // "3990 Fifth Ave"
+              const rest = parts.slice(1).join(',').trim(); // ", Pittsburgh, PA …"
+              return {
+                name: street,
+                address: rest || 'Pittsburgh, PA',
+                lat: parseFloat(r.lat),
+                lng: parseFloat(r.lon),
+                place_id: r.place_id
+              };
+            });
+
+          if (!items.length) { resultsEl.innerHTML = '<p>No matches found.</p>'; return; }
+
+          // Render results
+          resultsEl.innerHTML = '';
+          items.forEach(it => {
+            const div = document.createElement('div');
+            div.className = 'result';
+            div.innerHTML = `<strong>${it.name}</strong><br/><span class="muted">${it.address}</span>`;
+            div.onclick = () => selectPlace(it);
+            resultsEl.appendChild(div);
+          });
+        } catch (e) {
+          resultsEl.innerHTML = '<p>Search failed. Try again.</p>';
         }
-        resultsEl.innerHTML = '';
-        items.forEach(it => {
-          const div = document.createElement('div');
-          div.className = 'result';
-          div.innerHTML = `<strong>${it.name}</strong><br/><span class="muted">${it.address}</span>`;
-          div.onclick = () => selectPlace(it);
-          resultsEl.appendChild(div);
-        });
       }
 
-      searchBtn.onclick = runSearch;
-      qEl.addEventListener('keydown', (e) => { if (e.key === 'Enter') runSearch(); });
-
+      // ========= SELECT: center map, drop marker, show star+comment form, then reviews =========
       function selectPlace(p) {
         activePlace = p;
         if (activeMarker) map.removeLayer(activeMarker);
         activeMarker = L.marker([p.lat, p.lng]).addTo(map);
         map.flyTo([p.lat, p.lng], 18);
+
         renderForm();
-        loadReviews();
+        loadStreetReviews();
       }
 
+      // ========= Stars + comment form =========
       function renderForm() {
         const el = document.getElementById('placePanel');
         el.style.display = 'block';
         el.innerHTML = `
-          <h3>${activePlace.name}</h3>
-          <div class="muted">${activePlace.address}</div>
-          <hr/>
-          <div id="stars"></div>
-          <textarea id="comment" placeholder="Comment (optional)" style="width:100%;height:60px;"></textarea>
-          <button id="submitBtn">Submit Review</button>
+          <h3 style="margin:0 0 6px">${activePlace.name}</h3>
+          <div class="muted" style="margin-bottom:8px">${activePlace.address}</div>
+          <div id="stars" aria-label="Rating" role="radiogroup" style="margin:6px 0"></div>
+          <textarea id="comment" placeholder="Comment (optional)"></textarea>
+          <div style="margin-top:8px;display:flex;gap:8px;align-items:center">
+            <button id="submitBtn" class="primary">Submit Review</button>
+            <span id="submitMsg" class="muted"></span>
+          </div>
         `;
         setupStars();
         document.getElementById('submitBtn').onclick = submitReview;
@@ -103,7 +162,7 @@
 
       function setupStars() {
         const starsEl = document.getElementById('stars');
-        let current = 0;
+        let current = 0; // whole stars 0..5
         for (let i = 1; i <= 5; i++) {
           const s = document.createElement('span');
           s.className = 'star';
@@ -118,34 +177,72 @@
         update();
       }
 
+      // ========= POST to /api/reviews via API_BASE =========
+      // payload: { address (street-only), overall (1..5), comment, lat, lng }
       async function submitReview() {
-        const rating = parseInt(document.getElementById('stars').dataset.value || '0');
-        const comment = document.getElementById('comment').value;
-        if (!rating) return alert('Select a rating.');
-        const res = await fetch('/api/reviews', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ ...activePlace, rating, comment })
-        });
-        if (res.ok) loadReviews();
+        const rating = parseInt(document.getElementById('stars').dataset.value || '0', 10);
+        const comment = document.getElementById('comment').value.trim();
+        const msgEl = document.getElementById('submitMsg');
+        if (!rating) { msgEl.textContent = 'Pick a star rating.'; return; }
+
+        const payload = {
+          address: activePlace.name,
+          housingType: "",
+          overall: rating,
+          comment,
+          lat: activePlace.lat,
+          lng: activePlace.lng
+        };
+
+        try {
+          const res = await api('/api/reviews', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+          });
+          const j = await res.json().catch(() => ({}));
+          if (!res.ok) { msgEl.textContent = j.error || 'Could not save.'; return; }
+
+          msgEl.textContent = 'Saved!';
+          document.getElementById('comment').value = '';
+          if (typeof window.loadReviews === 'function') window.loadReviews(); // if you have a global one
+          loadStreetReviews();
+        } catch (e) {
+          msgEl.textContent = 'Network error.';
+        }
       }
 
-      async function loadReviews() {
+      // ========= Read all reviews, filter client-side for this street =========
+      async function loadStreetReviews() {
         const panel = document.getElementById('reviewsPanel');
         panel.style.display = 'block';
         panel.innerHTML = '<p class="muted">Loading reviews…</p>';
-        const res = await fetch(`/api/reviews?external_id=${encodeURIComponent(activePlace.external_id)}`);
-        const data = await res.json();
-        if (!data.reviews?.length) {
-          panel.innerHTML = '<p>No reviews yet.</p>';
-          return;
+        try {
+          const res = await api('/api/reviews?limit=500');
+          const all = await res.json();
+          const street = (activePlace?.name || '').toLowerCase();
+
+          const list = (Array.isArray(all) ? all : []).filter(r =>
+            (r.address || '').toLowerCase().startsWith(street)
+          );
+
+          if (!list.length) { panel.innerHTML = '<p>No reviews yet.</p>'; return; }
+
+          const avg = (list.reduce((s, r) => s + (parseInt(r.overall,10) || 0), 0) / list.length).toFixed(2);
+          panel.innerHTML = `<p>${list.length} review(s), average ${avg}/5</p>`;
+
+          list.forEach(r => {
+            const div = document.createElement('div');
+            const n = Math.max(0, Math.min(5, parseInt(r.overall,10) || 0));
+            const stars = '★'.repeat(n) + '☆'.repeat(5-n);
+            const safeComment = (r.comment ? String(r.comment) : '').replace(/</g,'&lt;');
+            div.style.marginTop = '4px';
+            div.innerHTML = `${stars} ${safeComment}`;
+            panel.appendChild(div);
+          });
+        } catch (e) {
+          panel.innerHTML = '<p>Failed to load reviews.</p>';
         }
-        panel.innerHTML = `<p>${data.count} review(s), average ${data.avg_rating}/5</p>`;
-        data.reviews.forEach(r => {
-          const div = document.createElement('div');
-          div.innerHTML = `${'★'.repeat(r.rating)}${'☆'.repeat(5-r.rating)} - ${r.comment || ''}`;
-          panel.appendChild(div);
-        });
       }
     </script>
   </body>
